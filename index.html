@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arriskuen ehiza · Caza de riesgos · Hazard Hunt</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1d2433;
+    --paper: #ffffff;
+    --safety: #ffc20e;
+    --ok: #1e9e5a;
+    --bad: #d7263d;
+    --info: #2b6cb0;
+    --muted: #6b7486;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Rubik', system-ui, sans-serif;
+    background: var(--ink);
+    color: var(--ink);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  button:focus-visible { outline: 4px solid var(--safety); outline-offset: 3px; }
+  .hidden { display: none !important; }
+
+  /* ── Menu ── */
+  #menu { min-height: 100vh; display: flex; flex-direction: column; }
+  .menu-head {
+    background: var(--safety);
+    background-image: repeating-linear-gradient(135deg, transparent 0 22px, rgba(29,36,51,0.08) 22px 44px);
+    padding: 32px 40px 28px;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+  }
+  .school { font-weight: 600; font-size: 1.05rem; opacity: 0.75; margin-bottom: 4px; }
+  .menu-head h1 { font-size: clamp(2.4rem, 6vw, 4.4rem); font-weight: 800; line-height: 0.95; letter-spacing: -0.03em; }
+  .menu-head p { font-size: 1.15rem; margin-top: 10px; max-width: 46ch; }
+  .langs { display: flex; background: var(--ink); border-radius: 999px; padding: 5px; gap: 4px; }
+  .langs button {
+    border: none; background: transparent; color: #fff;
+    font-weight: 800; font-size: 1.05rem; padding: 10px 18px; border-radius: 999px;
+  }
+  .langs button.on { background: var(--safety); color: var(--ink); }
+
+  .grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    padding: 28px 40px 40px;
+    align-content: start;
+    align-items: start;
+  }
+  .tile {
+    border: none; background: var(--paper); border-radius: 18px; overflow: hidden;
+    display: flex; flex-direction: column; text-align: left;
+    transition: transform 0.15s ease;
+  }
+  .tile:hover { transform: translateY(-4px); }
+  .tile svg { width: 100%; aspect-ratio: 16 / 9; display: block; background: #e6ecf1; pointer-events: none; }
+  .tile .t-body { padding: 14px 18px 18px; display: flex; align-items: center; gap: 12px; }
+  .tile .t-icon { font-size: 1.9rem; }
+  .tile .t-name { font-size: 1.25rem; font-weight: 800; line-height: 1.1; }
+  .tile .t-count { font-size: 0.95rem; color: var(--muted); margin-top: 2px; }
+
+  /* ── Game ── */
+  #game { height: 100vh; display: flex; flex-direction: column; overflow: hidden; touch-action: none; }
+  .bar {
+    height: 72px; flex: none;
+    display: flex; align-items: center; gap: 20px; padding: 0 20px;
+    background: var(--safety);
+    background-image: repeating-linear-gradient(135deg, transparent 0 22px, rgba(29,36,51,0.08) 22px 44px);
+  }
+  .bar .back { border: 3px solid var(--ink); background: transparent; border-radius: 999px; font-weight: 800; font-size: 1rem; padding: 8px 18px; }
+  .bar h2 { font-size: 1.5rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar .spacer { flex: 1; }
+  .count { font-size: 1.5rem; font-weight: 800; background: var(--ink); color: var(--safety); padding: 8px 18px; border-radius: 12px; white-space: nowrap; }
+  .clock { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 1.5rem; min-width: 200px; }
+  .track { flex: 1; height: 14px; background: rgba(29,36,51,0.18); border-radius: 99px; overflow: hidden; }
+  .fill { height: 100%; width: 100%; background: var(--ink); border-radius: 99px; transition: width 0.25s linear; }
+  .clock.low .fill { background: var(--bad); }
+  .clock.low span { color: var(--bad); }
+  .stage { flex: 1; min-height: 0; }
+  svg#scene { width: 100%; height: 100%; display: block; cursor: crosshair; }
+
+  .found-ring { fill: none; stroke: var(--ok); stroke-width: 8; }
+  .found-num { fill: #fff; font: 800 30px Rubik, sans-serif; text-anchor: middle; dominant-baseline: central; }
+  .found-badge { fill: var(--ok); }
+  .missed-ring { fill: rgba(215,38,61,0.12); stroke: var(--bad); stroke-width: 7; stroke-dasharray: 14 10; }
+  .miss-x { stroke: var(--bad); stroke-width: 8; stroke-linecap: round; animation: fade 0.9s forwards; }
+  .miss-t { paint-order: stroke; stroke: #fff; stroke-width: 8px; fill: var(--bad); font: 800 34px Rubik, sans-serif; text-anchor: middle; animation: rise 0.9s forwards; }
+  .ok-t { paint-order: stroke; stroke: #fff; stroke-width: 8px; fill: var(--ok); font: 800 30px Rubik, sans-serif; text-anchor: middle; animation: rise 1.4s forwards; }
+  .pop { animation: pop 0.35s cubic-bezier(.34,1.56,.64,1) both; transform-box: fill-box; transform-origin: center; }
+  @keyframes fade { to { opacity: 0; } }
+  @keyframes rise { to { opacity: 0; transform: translateY(-40px); } }
+  @keyframes pop { from { transform: scale(0.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  .card {
+    position: fixed; left: 24px; bottom: 24px;
+    width: min(540px, calc(100vw - 48px));
+    background: var(--paper);
+    border-left: 12px solid var(--ok);
+    border-radius: 16px;
+    padding: 20px 24px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+    transform: translateY(calc(100% + 40px));
+    transition: transform 0.3s ease;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .card.right { left: auto; right: 24px; }
+  .card.show { transform: translateY(0); }
+  .card.info { border-left-color: var(--info); }
+  .card h3 { font-size: 1.35rem; font-weight: 800; margin-bottom: 8px; }
+  .card p { font-size: 1.05rem; line-height: 1.45; }
+  .card .fix { margin-top: 10px; font-weight: 600; color: var(--ok); }
+
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(29,36,51,0.82);
+    display: grid; place-items: center;
+    padding: 24px;
+    z-index: 10;
+  }
+  .panel {
+    background: var(--paper);
+    border-radius: 24px;
+    padding: 40px 44px;
+    max-width: 660px; width: 100%;
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    border-top: 14px solid var(--safety);
+  }
+  .panel h2 { font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; }
+  .panel .lead { font-size: 1.2rem; line-height: 1.5; margin: 16px 0 8px; }
+  .panel .note { color: var(--muted); font-size: 1rem; line-height: 1.5; }
+  .btns { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+  .btn { background: var(--ink); color: var(--safety); border: none; border-radius: 999px; font-weight: 800; font-size: 1.25rem; padding: 15px 36px; }
+  .btn.light { background: #e6ecf1; color: var(--ink); }
+  .result { font-size: 4rem; font-weight: 800; margin: 10px 0 4px; }
+  .list { list-style: none; margin-top: 18px; display: grid; gap: 10px; }
+  .list li { padding: 12px 14px; border-radius: 12px; background: #f2f4f7; font-size: 1rem; line-height: 1.4; }
+  .list li b { display: block; margin-bottom: 2px; }
+  .list li.got b::before { content: "✔ "; color: var(--ok); }
+  .list li.miss b::before { content: "✖ "; color: var(--bad); }
+
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 700px) {
+    .menu-head { padding: 24px 16px; }
+    .grid { grid-template-columns: 1fr; padding: 20px 16px 32px; }
+    .bar { height: 64px; gap: 10px; padding: 0 10px; }
+    .bar h2 { display: none; }
+    .clock { min-width: 110px; font-size: 1.1rem; }
+    .count { font-size: 1.1rem; padding: 6px 12px; }
+    .panel { padding: 28px 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== MENU ===== -->
+<section id="menu">
+  <header class="menu-head">
+    <div>
+      <div class="school">CIFP Don Bosco LHII</div>
+      <h1 data-t="title"></h1>
+      <p data-t="menuLead"></p>
+    </div>
+    <div class="langs" role="group" aria-label="Hizkuntza / Idioma / Language">
+      <button data-lang="eu">EU</button><button data-lang="es">ES</button><button data-lang="en">EN</button>
+    </div>
+  </header>
+  <div class="grid" id="grid"></div>
+</section>
+
+<!-- ===== GAME ===== -->
+<section id="game" class="hidden">
+  <header class="bar">
+    <button class="back" id="back" data-t="menu"></button>
+    <h2 id="sceneTitle"></h2>
+    <span class="spacer"></span>
+    <div class="clock" id="clock"><span id="time">2:00</span><div class="track"><div class="fill" id="fill"></div></div></div>
+    <div class="count" id="count">0 / 0</div>
+  </header>
+  <main class="stage">
+    <svg id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet">
+      <g id="art"></g><g id="marks"></g>
+    </svg>
+  </main>
+</section>
+
+<div class="card" id="card"><h3 id="cardTitle"></h3><p id="cardText"></p><p class="fix" id="cardFix"></p></div>
+
+<div class="overlay hidden" id="start">
+  <div class="panel">
+    <h2 id="startTitle"></h2>
+    <p class="lead" id="startLead"></p>
+    <p class="note" data-t="startNote"></p>
+    <div class="btns"><button class="btn" id="go" data-t="go"></button><button class="btn light" id="startBack" data-t="menu"></button></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="end">
+  <div class="panel">
+    <h2 id="endTitle"></h2>
+    <div class="result" id="endScore"></div>
+    <p class="note" data-t="endNote"></p>
+    <ul class="list" id="endList"></ul>
+    <div class="btns">
+      <button class="btn" id="again" data-t="again"></button>
+      <button class="btn light" id="look" data-t="look"></button>
+      <button class="btn light" id="endBack" data-t="menu"></button>
+    </div>
+  </div>
+</div>
+
+<script src="js/helpers.js"></script>
+<script src="js/scenes/elektrizitatea.js"></script>
+<script src="js/scenes/mekanizatua.js"></script>
+<script src="js/scenes/soldadura.js"></script>
+<script src="js/scenes/kotxe-tailerra.js"></script>
+<script src="js/scenes/kimika.js"></script>
+<script src="js/scenes/elikadura.js"></script>
+<script src="js/scenes/antenak.js"></script>
+<script src="js/scenes/mugikortasuna.js"></script>
+<script>
+// ============================================================
+//  UI texts
+// ============================================================
+const UI = {
+  eu: {
+    title: "Arriskuen ehiza", menuLead: "Aukeratu tailer bat eta aurkitu ezkutatuta dauden arriskuak.",
+    hazards: n => n + " arrisku", menu: "Menua",
+    startLead: n => `Hemen <b>${n} arrisku</b> daude ezkutatuta. Aurkitu ahalik eta gehien <b>2 minututan</b>!`,
+    startNote: "Ukitu arriskua dagoen lekua. Taldean jokatu dezakezue: hainbat pertsonak batera ukitu dezakete. Kontuz: huts egiteak 3 segundo kentzen ditu.",
+    go: "Hasi", fix: "Zuzenketa: ", ok: "Ondo dago",
+    endAll: "Bikain! Arrisku guztiak aurkitu dituzue", endGood: "Oso ondo!", endMid: "Ez dago gaizki", endLow: "Denbora amaitu da",
+    endNote: "Aurkitu ez dituzuenak gorriz markatuta daude eszenan. Hona hemen arrisku guztiak:",
+    again: "Berriro jokatu", look: "Eszena ikusi"
+  },
+  es: {
+    title: "Caza de riesgos", menuLead: "Elige un taller y encuentra los riesgos ocultos.",
+    hazards: n => n + " riesgos", menu: "Menú",
+    startLead: n => `Aquí hay <b>${n} riesgos</b> ocultos. ¡Encontrad todos los que podáis en <b>2 minutos</b>!`,
+    startNote: "Tocad el lugar donde está el riesgo. Podéis jugar en equipo: varias personas pueden tocar a la vez. Cuidado: cada fallo resta 3 segundos.",
+    go: "Empezar", fix: "Medida: ", ok: "Está bien",
+    endAll: "¡Excelente! Habéis encontrado todos los riesgos", endGood: "¡Muy bien!", endMid: "No está mal", endLow: "Se acabó el tiempo",
+    endNote: "Los que no habéis encontrado están marcados en rojo en la escena. Aquí tenéis todos los riesgos:",
+    again: "Jugar otra vez", look: "Ver la escena"
+  },
+  en: {
+    title: "Hazard Hunt", menuLead: "Choose a workshop and find the hidden hazards.",
+    hazards: n => n + " hazards", menu: "Menu",
+    startLead: n => `There are <b>${n} hazards</b> hidden here. Find as many as you can in <b>2 minutes</b>!`,
+    startNote: "Touch the spot where the hazard is. You can play as a team: several people can touch at the same time. Careful: every miss takes 3 seconds off.",
+    go: "Start", fix: "How to fix it: ", ok: "That's fine",
+    endAll: "Excellent! You found every hazard", endGood: "Great job!", endMid: "Not bad", endLow: "Time's up",
+    endNote: "The ones you missed are marked in red on the scene. Here are all the hazards:",
+    again: "Play again", look: "See the scene"
+  }
+};
+
+let lang = 'eu';
+try { const l = localStorage.getItem('hh-lang'); if (UI[l]) lang = l; } catch (e) {}
+const T = k => UI[lang][k];
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-t]').forEach(n => { n.textContent = T(n.dataset.t); });
+  document.querySelectorAll('.langs button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+  buildMenu();
+}
+document.querySelectorAll('.langs button').forEach(b => b.onclick = () => {
+  lang = b.dataset.lang;
+  try { localStorage.setItem('hh-lang', lang); } catch (e) {}
+  applyLang();
+});
+
+// ============================================================
+//  Menu
+// ============================================================
+function buildMenu() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  SCENES.forEach((sc, i) => {
+    const b = document.createElement('button');
+    b.className = 'tile';
+    b.innerHTML = `<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">${sc.svg}</svg>
+      <div class="t-body"><span class="t-icon">${sc.icon}</span>
+      <div><div class="t-name"></div><div class="t-count"></div></div></div>`;
+    b.querySelector('.t-name').textContent = sc.title[lang];
+    b.querySelector('.t-count').textContent = T('hazards')(sc.hazards.length);
+    b.onclick = () => openScene(i);
+    grid.appendChild(b);
+  });
+}
+
+// ============================================================
+//  Game
+// ============================================================
+const TOTAL_TIME = 120, PENALTY = 3, NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('scene');
+const art = document.getElementById('art');
+const marks = document.getElementById('marks');
+let sc = null, found = new Set(), timeLeft = TOTAL_TIME, timer = null, playing = false, cardTimer;
+
+function el(tag, attrs, parent = marks) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  parent.appendChild(n);
+  return n;
+}
+function toScene(e) {
+  const p = svg.createSVGPoint();
+  p.x = e.clientX; p.y = e.clientY;
+  return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+const hit = (list, pt) => list.findIndex(h => Math.hypot(pt.x - h.x, pt.y - h.y) <= h.r);
+
+function showCard(title, text, fix, info, x) {
+  document.getElementById('cardTitle').textContent = title;
+  document.getElementById('cardText').textContent = text;
+  document.getElementById('cardFix').textContent = fix ? T('fix') + fix : '';
+  const c = document.getElementById('card');
+  c.classList.toggle('info', !!info);
+  c.classList.toggle('right', x !== undefined && x < 800);
+  c.classList.add('show');
+  clearTimeout(cardTimer);
+  cardTimer = setTimeout(() => c.classList.remove('show'), 6000);
+}
+function hideCard() { clearTimeout(cardTimer); document.getElementById('card').classList.remove('show'); }
+
+function updateHud() {
+  document.getElementById('count').textContent = found.size + ' / ' + (sc ? sc.hazards.length : 0);
+  const m = Math.floor(timeLeft / 60), s = timeLeft % 60;
+  document.getElementById('time').textContent = m + ':' + String(s).padStart(2, '0');
+  document.getElementById('fill').style.width = (timeLeft / TOTAL_TIME * 100) + '%';
+  document.getElementById('clock').classList.toggle('low', timeLeft <= 20);
+}
+
+function openScene(i) {
+  sc = SCENES[i];
+  art.innerHTML = sc.svg;
+  marks.innerHTML = '';
+  found = new Set(); timeLeft = TOTAL_TIME; playing = false;
+  document.getElementById('sceneTitle').textContent = sc.icon + ' ' + sc.title[lang];
+  document.getElementById('startTitle').textContent = sc.icon + ' ' + sc.title[lang];
+  document.getElementById('startLead').innerHTML = T('startLead')(sc.hazards.length);
+  updateHud();
+  document.getElementById('menu').classList.add('hidden');
+  document.getElementById('game').classList.remove('hidden');
+  document.getElementById('end').classList.add('hidden');
+  document.getElementById('start').classList.remove('hidden');
+  document.getElementById('go').focus();
+}
+
+function startRound() {
+  marks.innerHTML = '';
+  found = new Set(); timeLeft = TOTAL_TIME; playing = true;
+  updateHud(); hideCard();
+  document.getElementById('start').classList.add('hidden');
+  document.getElementById('end').classList.add('hidden');
+  clearInterval(timer);
+  timer = setInterval(() => { timeLeft--; updateHud(); if (timeLeft <= 0) finish(false); }, 1000);
+}
+
+function finish(all) {
+  if (!playing) return;
+  playing = false;
+  clearInterval(timer);
+  hideCard();
+  sc.hazards.forEach((h, i) => { if (!found.has(i)) el('circle', { cx: h.x, cy: h.y, r: h.r, class: 'missed-ring pop' }); });
+  const n = found.size, total = sc.hazards.length;
+  document.getElementById('endTitle').textContent =
+    all ? T('endAll') : n >= total * 0.7 ? T('endGood') : n >= total * 0.4 ? T('endMid') : T('endLow');
+  document.getElementById('endScore').textContent = n + ' / ' + total;
+  const list = document.getElementById('endList');
+  list.innerHTML = '';
+  sc.hazards.forEach((h, i) => {
+    const li = document.createElement('li');
+    li.className = found.has(i) ? 'got' : 'miss';
+    li.innerHTML = '<b></b><span></span>';
+    li.querySelector('b').textContent = h.name[lang];
+    li.querySelector('span').textContent = T('fix') + h.fix[lang];
+    list.appendChild(li);
+  });
+  setTimeout(() => document.getElementById('end').classList.remove('hidden'), all ? 1200 : 400);
+}
+
+function goMenu() {
+  playing = false; clearInterval(timer); hideCard();
+  document.getElementById('start').classList.add('hidden');
+  document.getElementById('end').classList.add('hidden');
+  document.getElementById('game').classList.add('hidden');
+  document.getElementById('menu').classList.remove('hidden');
+}
+
+svg.addEventListener('pointerdown', e => {
+  if (!playing) return;
+  const pt = toScene(e);
+  // nearest hazard under the finger that has not been found yet
+  let i = -1, best = Infinity, any = false;
+  sc.hazards.forEach((h, k) => {
+    const d = Math.hypot(pt.x - h.x, pt.y - h.y) / h.r;
+    if (d <= 1) { any = true; if (!found.has(k) && d < best) { best = d; i = k; } }
+  });
+  if (any && i < 0) return;
+  if (i >= 0) {
+    found.add(i);
+    const h = sc.hazards[i];
+    const g = el('g', { class: 'pop' });
+    el('circle', { cx: h.x, cy: h.y, r: h.r, class: 'found-ring' }, g);
+    el('circle', { cx: h.x + h.r * 0.7, cy: h.y - h.r * 0.7, r: 24, class: 'found-badge' }, g);
+    el('text', { x: h.x + h.r * 0.7, y: h.y - h.r * 0.7, class: 'found-num' }, g).textContent = found.size;
+    showCard('✔ ' + h.name[lang], h.why[lang], h.fix[lang], false, pt.x);
+    updateHud();
+    if (found.size === sc.hazards.length) finish(true);
+    return;
+  }
+  const s = hit(sc.safe || [], pt);
+  if (s >= 0) {
+    const o = sc.safe[s];
+    showCard('👍 ' + o.name[lang], o.why[lang], '', true, pt.x);
+    const t = el('text', { x: o.x, y: o.y, class: 'ok-t' });
+    t.textContent = T('ok');
+    setTimeout(() => t.remove(), 1400);
+    return;
+  }
+  const g = el('g');
+  el('line', { x1: pt.x - 16, y1: pt.y - 16, x2: pt.x + 16, y2: pt.y + 16, class: 'miss-x' }, g);
+  el('line', { x1: pt.x + 16, y1: pt.y - 16, x2: pt.x - 16, y2: pt.y + 16, class: 'miss-x' }, g);
+  el('text', { x: pt.x, y: pt.y - 30, class: 'miss-t' }, g).textContent = '-' + PENALTY + ' s';
+  setTimeout(() => g.remove(), 900);
+  timeLeft = Math.max(0, timeLeft - PENALTY);
+  updateHud();
+  if (timeLeft === 0) finish(false);
+});
+
+document.getElementById('go').onclick = startRound;
+document.getElementById('again').onclick = startRound;
+document.getElementById('look').onclick = () => document.getElementById('end').classList.add('hidden');
+['back', 'startBack', 'endBack'].forEach(id => document.getElementById(id).onclick = goMenu);
+
+applyLang();
+</script>
+</body>
+</html>
